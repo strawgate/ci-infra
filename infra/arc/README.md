@@ -28,8 +28,9 @@ normally supplied by GitHub-hosted runner images. ARC runner templates must expl
 `/home/runner/run.sh`; the base image's default command is an interactive
 shell and exits immediately in Kubernetes.
 
-The agent template is the only runner Pod with `privileged: true`; it needs
-that for dockerd and gh-aw's network firewall. It uses Docker's portable `vfs`
+The agent runner container has `privileged: true` for dockerd and gh-aw's
+network firewall. Standard ARC jobs also have a privileged dind sidecar.
+The agent uses Docker's portable `vfs`
 storage driver because nested overlayfs cannot unpack some firewall-image OCI
 whiteouts. That cost is acceptable for these ephemeral, trusted workflows.
 
@@ -134,6 +135,18 @@ sudo systemctl stop k3s
 sudo mv /var/lib/kubelet/cpu_manager_state /var/lib/kubelet/cpu_manager_state.bak
 sudo systemctl start k3s
 ```
+
+The same checkpoint can also lose CPUs while the node is running. On
+2026-09-28, the node advertised 46 allocatable CPUs but, after **all** runner
+pods drained, `defaultCpuSet` held only 28 of the VM's 48 CPUs. New pods then
+failed with `UnexpectedAdmissionError` despite apparent scheduler capacity.
+Check both the running pods and `cpu_manager_state`; do not infer a leak from
+the scheduler's numbers alone. Recovery was: temporarily set every scale
+set's `maxRunners` to 0, wait for runner pods to finish, stop k3s, move the
+checkpoint to a dated backup, start k3s, verify `defaultCpuSet` is `0-47`,
+then restore the original scale-set limits. Never reset the checkpoint while
+runner pods are active. If this recurs, investigate the v1.36 pod-level CPU
+manager before making a restart timer: a timed restart would kill CI jobs.
 
 ## opamp-clients
 

@@ -26,7 +26,7 @@ template:
       - name: ghcr
     containers:
       - name: runner
-        image: ghcr.io/strawgate/o11yfleet-arc-agent-runner:20260922-06ed509
+        image: ghcr.io/strawgate/ci-infra-o11yfleet-arc-agent-runner:20260928-3fd5526
         command: ["/usr/local/bin/start-dockerd.sh"]
         imagePullPolicy: IfNotPresent
         securityContext:
