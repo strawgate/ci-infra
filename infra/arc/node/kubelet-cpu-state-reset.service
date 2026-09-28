@@ -1,6 +1,6 @@
 [Unit]
 Description=Clear kubelet CPU/memory manager state before k3s starts at boot
-Documentation=https://github.com/strawgate/o11yfleet/blob/main/infra/arc/README.md
+Documentation=https://github.com/strawgate/ci-infra/blob/main/infra/arc/README.md
 # The static CPU manager (reserved-cpus=0-1) records per-pod CPU pins. After
 # an unclean reboot those pods are gone but the file is not, and the kubelet
 # refuses to start ("current set of available CPUs doesn't match"), which
@@ -8,6 +8,9 @@ Documentation=https://github.com/strawgate/o11yfleet/blob/main/infra/arc/README.
 Before=k3s.service
 DefaultDependencies=no
 After=local-fs.target
+# The kubelet directory is an XFS bind mount marked nofail, so local-fs.target
+# can finish before it mounts. Clear the checkpoint on the mounted disk.
+RequiresMountsFor=/var/lib/kubelet
 
 [Service]
 Type=oneshot
