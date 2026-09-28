@@ -1,0 +1,29 @@
+# strawgate/opamp-clients' heavy runners: release test builds, Kani, Miri and
+# coverage, TLC. See "opamp-clients" in infra/arc/README.md.
+githubConfigUrl: https://github.com/strawgate/opamp-clients
+githubConfigSecret: arc-github-app
+runnerScaleSetName: opamp-clients-4c-16g
+minRunners: 0
+maxRunners: 2
+containerMode:
+  type: dind
+controllerServiceAccount:
+  namespace: arc-systems
+  name: arc-gha-rs-controller
+template:
+  spec:
+    resources:
+      requests:
+        cpu: "4"
+        memory: 16Gi
+      limits:
+        cpu: "4"
+        memory: 16Gi
+    # A private GHCR package: needs the `ghcr` pull secret (infra/arc/README.md).
+    imagePullSecrets:
+      - name: ghcr
+    containers:
+      - name: runner
+        image: ghcr.io/strawgate/opamp-clients-arc-runner:20260928-f7a5207
+        command: ["/home/runner/run.sh"]
+        imagePullPolicy: IfNotPresent

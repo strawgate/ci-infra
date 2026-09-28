@@ -1,0 +1,17 @@
+[Unit]
+Description=Clear kubelet CPU/memory manager state before k3s starts at boot
+Documentation=https://github.com/strawgate/o11yfleet/blob/main/infra/arc/README.md
+# The static CPU manager (reserved-cpus=0-1) records per-pod CPU pins. After
+# an unclean reboot those pods are gone but the file is not, and the kubelet
+# refuses to start ("current set of available CPUs doesn't match"), which
+# crash-loops k3s. Boot is the only safe time to clear it: no containers exist.
+Before=k3s.service
+DefaultDependencies=no
+After=local-fs.target
+
+[Service]
+Type=oneshot
+ExecStart=/bin/rm -f /var/lib/kubelet/cpu_manager_state /var/lib/kubelet/memory_manager_state
+
+[Install]
+WantedBy=multi-user.target

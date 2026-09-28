@@ -1,0 +1,35 @@
+githubConfigUrl: https://github.com/strawgate/o11yfleet
+githubConfigSecret: arc-github-app
+runnerScaleSetName: o11yfleet-agent-2c-8g
+minRunners: 0
+# The regular 1c/2c/4c scale sets already reserve 26 vCPU at their maxima.
+# Keep the dedicated agent lane within the host's 28-vCPU allocatable budget.
+maxRunners: 1
+controllerServiceAccount:
+  namespace: arc-systems
+  name: arc-gha-rs-controller
+template:
+  spec:
+    resources:
+      requests:
+        cpu: "2"
+        memory: 8Gi
+      limits:
+        cpu: "2"
+        memory: 8Gi
+    # REQUIRED. `image:` below is a private GHCR package, so the node cannot
+    # pull it without this secret -- `helm upgrade` against these values
+    # before creating it leaves the pods in ErrImagePull. Create it once:
+    #   kubectl create secret docker-registry ghcr ... -n arc-runners
+    # See infra/arc/README.md.
+    imagePullSecrets:
+      - name: ghcr
+    containers:
+      - name: runner
+        image: ghcr.io/strawgate/o11yfleet-arc-agent-runner:20260922-06ed509
+        command: ["/usr/local/bin/start-dockerd.sh"]
+        imagePullPolicy: IfNotPresent
+        securityContext:
+          # Required by dockerd and the gh-aw network firewall. This applies
+          # only to trusted, GitHub-controlled agent workflow definitions.
+          privileged: true

@@ -1,0 +1,30 @@
+# strawgate/opamp-clients' default runners. See "opamp-clients" in
+# infra/arc/README.md: its own scale sets (a user account's runners belong to
+# one repository), on this node, capped so its CI can't starve o11yfleet's.
+githubConfigUrl: https://github.com/strawgate/opamp-clients
+githubConfigSecret: arc-github-app
+runnerScaleSetName: opamp-clients-2c-8g
+minRunners: 0
+maxRunners: 6
+containerMode:
+  type: dind
+controllerServiceAccount:
+  namespace: arc-systems
+  name: arc-gha-rs-controller
+template:
+  spec:
+    resources:
+      requests:
+        cpu: "2"
+        memory: 8Gi
+      limits:
+        cpu: "2"
+        memory: 8Gi
+    # A private GHCR package: needs the `ghcr` pull secret (infra/arc/README.md).
+    imagePullSecrets:
+      - name: ghcr
+    containers:
+      - name: runner
+        image: ghcr.io/strawgate/opamp-clients-arc-runner:20260928-f7a5207
+        command: ["/home/runner/run.sh"]
+        imagePullPolicy: IfNotPresent

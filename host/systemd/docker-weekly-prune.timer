@@ -1,0 +1,11 @@
+[Unit]
+Description=Weekly Docker pruning on Sunday night
+
+[Timer]
+OnCalendar=Sun *-*-* 03:00:00
+AccuracySec=5min
+Persistent=false
+Unit=docker-weekly-prune.service
+
+[Install]
+WantedBy=timers.target

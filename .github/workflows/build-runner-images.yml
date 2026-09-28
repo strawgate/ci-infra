@@ -1,0 +1,52 @@
+name: Build ARC runner images
+
+# Keep the repair path off the fleet it repairs. A bad runner image must not
+# prevent this workflow from producing its replacement.
+on:
+  push:
+    branches: [main]
+    paths:
+      - infra/arc/runner/**
+      - infra/arc/agent-runner/**
+      - infra/arc/opamp-clients-runner/**
+      - .github/workflows/build-runner-images.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: o11yfleet-arc-runner
+            context: infra/arc/runner
+          - name: o11yfleet-arc-agent-runner
+            context: infra/arc/agent-runner
+          - name: opamp-clients-arc-runner
+            context: infra/arc/opamp-clients-runner
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - id: tag
+        run: echo "tag=$(date -u +%Y%m%d)-$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+      - uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: ${{ matrix.context }}
+          platforms: linux/amd64
+          push: true
+          tags: ghcr.io/strawgate/ci-infra-${{ matrix.name }}:${{ steps.tag.outputs.tag }}
+          cache-from: type=registry,ref=ghcr.io/strawgate/ci-infra-${{ matrix.name }}:buildcache
+          cache-to: type=registry,ref=ghcr.io/strawgate/ci-infra-${{ matrix.name }}:buildcache,mode=max
+          provenance: false
+      - run: echo "ghcr.io/strawgate/ci-infra-${{ matrix.name }}:${{ steps.tag.outputs.tag }}" >> "$GITHUB_STEP_SUMMARY"

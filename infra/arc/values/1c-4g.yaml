@@ -1,0 +1,47 @@
+githubConfigUrl: https://github.com/strawgate/o11yfleet
+githubConfigSecret: arc-github-app
+runnerScaleSetName: o11yfleet-1c-4g
+minRunners: 0
+maxRunners: 2
+containerMode:
+  type: dind
+controllerServiceAccount:
+  namespace: arc-systems
+  name: arc-gha-rs-controller
+template:
+  spec:
+    resources:
+      requests:
+        cpu: "1"
+        memory: 4Gi
+      limits:
+        cpu: "1"
+        memory: 4Gi
+    # REQUIRED. `image:` below is a private GHCR package, so the node cannot
+    # pull it without this secret -- `helm upgrade` against these values
+    # before creating it leaves the pods in ErrImagePull. Create it once:
+    #   kubectl create secret docker-registry ghcr ... -n arc-runners
+    # See infra/arc/README.md.
+    imagePullSecrets:
+      - name: ghcr
+    containers:
+      - name: runner
+        image: ghcr.io/strawgate/o11yfleet-arc-runner:20260922-06ed509
+        command: ["/home/runner/run.sh"]
+        imagePullPolicy: IfNotPresent
+        # Shared pnpm store on the node, so `pnpm install` reads packages from
+        # local disk instead of restoring a 337MB Actions cache over the
+        # node's slow uplink. Mount only: jobs opt in through
+        # .github/actions/seed-runner-toolchains. See "Shared pnpm store" in
+        # infra/arc/README.md for why this must not be a pod env var.
+        volumeMounts:
+          - name: pnpm-store
+            mountPath: /home/runner/.pnpm-store-shared
+    volumes:
+      - name: pnpm-store
+        hostPath:
+          # Created by hand, owned by uid 1001 (runner). `Directory` rather
+          # than `DirectoryOrCreate`: a missing dir should fail the pod
+          # loudly, not silently create a root-owned one pnpm cannot write.
+          path: /var/cache/o11yfleet/pnpm-store
+          type: Directory

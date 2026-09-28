@@ -1,0 +1,10 @@
+.env
+.env.*
+*.pem
+*.key
+*.p12
+*kubeconfig*
+*.qcow2
+*.iso
+*.tfstate
+*.tfstate.*
