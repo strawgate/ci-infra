@@ -1,0 +1,31 @@
+name: Check CI infrastructure
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest # Validation must work when ARC itself is broken.
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: "1.25"
+      - uses: azure/setup-helm@9bc31f4ebc9c6b171d7bfbaa5d006ae7abdb4310 # v5.0.1
+        with:
+          version: v4.2.0
+      - name: Validate workflows
+        run: go run github.com/rhysd/actionlint/cmd/actionlint@v1.7.12 -shellcheck= .github/workflows/*.yml
+      - name: Render every pinned scale set
+        run: |
+          for values in infra/arc/values/*.yaml; do
+            helm template "$(basename "$values" .yaml)" \
+              oci://ghcr.io/actions/actions-runner-controller-charts/gha-runner-scale-set \
+              --version 0.14.2 --namespace arc-runners --values "$values" >/dev/null
+          done
