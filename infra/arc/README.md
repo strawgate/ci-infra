@@ -14,7 +14,7 @@ to this repository.
 
 The same node also runs two scale sets for **strawgate/opamp-clients**
 (`opamp-clients-2c-8g`, up to 6 runners, and `opamp-clients-4c-16g`, up to
-2). strawgate is a user account, and a user account's self-hosted runners
+4). strawgate is a user account, and a user account's self-hosted runners
 belong to one repository, so that repository needs scale sets of its own
 rather than sharing these. See [opamp-clients](#opamp-clients).
 
@@ -175,18 +175,20 @@ ARC base and adds what that repository's jobs expected of GitHub-hosted
 
 It has no pnpm store mount: that repository doesn't use pnpm.
 
-Its jobs share the node with this fleet's. The 2-core cap is 6 and the
-4-core cap 2. The pod-level CPU and memory requests remain equal to their
-limits, so Kubernetes leaves excess runner pods Pending when the node is full.
-Past the caps, jobs remain queued at GitHub.
+Its jobs share the node with this fleet's. The 2-core cap is 6, and the 4-core
+cap is being trialed at 4 (up from 2). The pod-level CPU and memory requests
+remain equal to their limits, so Kubernetes leaves excess runner pods Pending
+when the node is full. Watch o11yfleet queue time and node scheduling during
+overlapping runs; return the 4-core cap to 2 if OpAMP delays o11yfleet CI. Past
+the caps, jobs remain queued at GitHub.
 
-A trial at 10 (2026-09-28) was rolled back the next day. From about 20:20 UTC
-that day, o11yfleet's end-to-end suites timed out on every run: opamp-clients
-conformance jobs on the node went from 5-10 an hour to 50-60, node load reached
-40-90 on 56 vCPUs, and one 4 KiB fsync on the shared qcow2 disk took 16-390 ms
-(strawgate/o11yfleet#3059 moved the local worker state to /dev/shm to cope).
-Disk, not CPU, is what this node runs out of first; raise a cap only with a
-look at `io.pressure` during overlapping runs.
+A 2-core trial at 10 (2026-09-28) was rolled back the next day. From about
+20:20 UTC that day, o11yfleet's end-to-end suites timed out on every run:
+opamp-clients conformance jobs on the node went from 5-10 an hour to 50-60,
+node load reached 40-90 on 56 vCPUs, and one 4 KiB fsync on the shared qcow2
+disk took 16-390 ms (strawgate/o11yfleet#3059 moved the local worker state to
+/dev/shm to cope). Disk, not CPU, is what this node runs out of first; raise a
+cap only with a look at `io.pressure` during overlapping runs.
 
 One-time setup:
 
