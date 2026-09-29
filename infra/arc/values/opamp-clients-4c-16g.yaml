@@ -24,6 +24,6 @@ template:
       - name: ghcr
     containers:
       - name: runner
-        image: ghcr.io/strawgate/ci-infra-opamp-clients-arc-runner:20260928-3fd5526
+        image: ghcr.io/strawgate/ci-infra-opamp-clients-arc-runner:20260929-0f51823
         command: ["/home/runner/run.sh"]
         imagePullPolicy: IfNotPresent
