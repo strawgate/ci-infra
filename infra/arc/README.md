@@ -118,9 +118,18 @@ gone but the file is not, and the kubelet refuses to start ("current set of
 available CPUs … doesn't match with CPUs in state"). That crash-loops k3s and
 takes the whole fleet down. It happened on 2026-09-23.
 
+The ARC VM has 56 vCPUs as of 2026-09-28, leaving 16 of the host's 72 logical
+CPUs outside the VM. K3s should report 56 capacity and 54 allocatable CPUs.
+Changing the VM's vCPU count requires draining the runner scale sets before
+restarting the VM; the static CPU manager does not support live CPU hotplug.
+
 [`node/kubelet-cpu-state-reset.service`](node/kubelet-cpu-state-reset.service)
 clears the file at boot, before k3s starts, when no containers exist. It is
-installed and enabled on the node:
+installed and enabled on the node. It must wait for `/var/lib/kubelet` to
+mount: the XFS bind mount is marked `nofail`, so `local-fs.target` alone can
+finish first. During the 56-vCPU resize, the old unit ran before that mount
+and left the real checkpoint untouched, preventing K3s from starting until
+the checkpoint was moved aside. Install the corrected unit with:
 
 ```bash
 sudo cp infra/arc/node/kubelet-cpu-state-reset.service /etc/systemd/system/
@@ -147,6 +156,8 @@ checkpoint to a dated backup, start k3s, verify `defaultCpuSet` is `0-47`,
 then restore the original scale-set limits. Never reset the checkpoint while
 runner pods are active. If this recurs, investigate the v1.36 pod-level CPU
 manager before making a restart timer: a timed restart would kill CI jobs.
+That `0-47` check was for the former 48-vCPU VM; after the resize, an empty
+node's expected `defaultCpuSet` is `0-55`.
 
 ## opamp-clients
 

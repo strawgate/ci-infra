@@ -2,8 +2,8 @@ githubConfigUrl: https://github.com/strawgate/o11yfleet
 githubConfigSecret: arc-github-app
 runnerScaleSetName: o11yfleet-agent-2c-8g
 minRunners: 0
-# The regular 1c/2c/4c scale sets already reserve 26 vCPU at their maxima.
-# Keep the dedicated agent lane within the host's 28-vCPU allocatable budget.
+# This dedicated lane adds up to 2 vCPUs to the regular scale sets; account
+# for all repositories' runner limits when checking node capacity.
 maxRunners: 1
 controllerServiceAccount:
   namespace: arc-systems
