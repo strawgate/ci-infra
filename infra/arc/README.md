@@ -13,7 +13,7 @@ to this repository.
 | `o11yfleet-4c-16g`      | 4 vCPU / 16 GiB |               5 | E2E, mutation, and deploy-gating work |
 
 The same node also runs two scale sets for **strawgate/opamp-clients**
-(`opamp-clients-2c-8g`, up to 6 runners, and `opamp-clients-4c-16g`, up to
+(`opamp-clients-2c-8g`, up to 10 runners, and `opamp-clients-4c-16g`, up to
 2). strawgate is a user account, and a user account's self-hosted runners
 belong to one repository, so that repository needs scale sets of its own
 rather than sharing these. See [opamp-clients](#opamp-clients).
@@ -175,10 +175,12 @@ ARC base and adds what that repository's jobs expected of GitHub-hosted
 
 It has no pnpm store mount: that repository doesn't use pnpm.
 
-Its jobs share the node with this fleet's. The caps (6 and 2 runners) keep a
-full opamp-clients run (about 25 jobs per push) from starving o11yfleet's CI.
-Past the caps its jobs queue. Pods also stay Pending when the node is full,
-whichever repository they belong to.
+Its jobs share the node with this fleet's. The 2-core cap is being trialed at
+10 (up from 6), while the 4-core cap stays at 2. The pod-level CPU and memory
+requests remain equal to their limits, so Kubernetes leaves excess runner pods
+Pending when the node is full. Watch o11yfleet queue time and node scheduling
+during overlapping runs; return the 2-core cap to 6 if OpAMP delays o11yfleet
+CI. Past the caps, jobs remain queued at GitHub.
 
 One-time setup:
 
