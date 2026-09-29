@@ -44,9 +44,15 @@ RUN set -eux \
 # PLAYWRIGHT_BROWSERS_PATH is already in turbo.json's globalPassThroughEnv, so
 # the value reaches every task. ci.yml keys its cache steps off this directory
 # existing, which means a runner WITHOUT this layer keeps the old behaviour.
+#
+# WebKit too: o11yfleet's UI regression job (ci-e2e.yml) runs a WebKit smoke
+# project, and without it baked spent ~150s on `playwright install-deps` (apt:
+# GStreamer, libwoff1, …) plus ~40s downloading WebKit on every run. Its
+# seed-runner-toolchains action reports a baked `webkit-*` directory, and the
+# job then skips the apt step.
 ENV PLAYWRIGHT_BROWSERS_PATH=/opt/ms-playwright
 RUN set -eux \
-    && npx --yes "playwright@${PLAYWRIGHT_VERSION}" install --with-deps chromium chromium-headless-shell \
+    && npx --yes "playwright@${PLAYWRIGHT_VERSION}" install --with-deps chromium chromium-headless-shell webkit \
     && rm -rf /var/lib/apt/lists/* /root/.npm \
     && chmod -R a+rX "${PLAYWRIGHT_BROWSERS_PATH}"
 
