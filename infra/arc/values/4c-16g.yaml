@@ -24,6 +24,7 @@ template:
     # See infra/arc/README.md.
     imagePullSecrets:
       - name: ghcr
+      - name: dockerhub-public-pulls
     containers:
       - name: runner
         image: ghcr.io/strawgate/ci-infra-o11yfleet-arc-runner:20260929-0f51823

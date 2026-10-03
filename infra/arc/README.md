@@ -242,6 +242,19 @@ sudo KUBECONFIG=/etc/rancher/k3s/k3s.yaml kubectl create secret docker-registry 
   --namespace arc-runners
 ```
 
+### Docker Hub pulls for runner sidecars
+
+The `dind` runner pods also pull Docker Hub's `docker:dind` image. Their
+`imagePullSecrets` include `dockerhub-public-pulls`, a
+`kubernetes.io/dockerconfigjson` secret in `arc-runners` backed by a Docker Hub
+**public-read-only** token. Create the secret on the node before upgrading the
+scale sets. Never commit the token or put it in Helm values.
+
+This authenticates **k3s image pulls only**. A Docker command inside a job
+talks to that runner's separate, ephemeral Docker daemon and does not inherit
+the pod's image pull secret. Authenticate those pulls in the job, or configure
+a registry mirror for the DinD daemon, if they hit Docker Hub limits.
+
 ### Each update
 
 Bump the tag in all four o11yfleet values files and apply (for the
