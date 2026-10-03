@@ -22,6 +22,8 @@ jobs:
           version: v4.2.0
       - name: Validate workflows
         run: go run github.com/rhysd/actionlint/cmd/actionlint@v1.7.12 -shellcheck= .github/workflows/*.yml
+      - name: Validate mirror scripts
+        run: shellcheck infra/arc/mirror/check.sh infra/arc/mirror/start.sh infra/arc/node/check-scale-sets.sh infra/arc/node/helm-plugins/arc-dind-mirror/render.sh
       - name: Render every pinned scale set
         run: infra/arc/node/check-scale-sets.sh
       - name: Validate Docker Hub mirror

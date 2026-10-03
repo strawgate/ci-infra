@@ -1,7 +1,7 @@
 [Unit]
 Description=Check ARC Docker Hub mirror health and disk usage
-Wants=network-online.target
-After=network-online.target docker.service
+Requires=arc-dockerhub-mirror.service
+After=arc-dockerhub-mirror.service
 
 [Service]
 Type=oneshot

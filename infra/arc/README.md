@@ -260,7 +260,7 @@ all runner daemons. It binds only to the libvirt bridge
 Docker Hub login upstream. It does not cache GHCR or pnpm packages, and each
 active daemon still needs its own local layers to run containers.
 
-On `docker-host`, copy `infra/arc/mirror/{compose.yaml,config.yml,install-credentials.py,check.sh}`
+On `docker-host`, copy `infra/arc/mirror/{compose.yaml,config.yml,install-credentials.py,check.sh,start.sh}`
 to `/data/gha-o11yfleet/arc-dockerhub-mirror/`. The host Docker CLI must first
 be logged in as `strawgatepydantic`. Then install the mirror (the credential
 file is root-owned mode 0600 and must never be committed):
@@ -270,7 +270,13 @@ sudo install -d -m 0750 /data/gha-o11yfleet/dockerhub-mirror
 sudo python3 /data/gha-o11yfleet/arc-dockerhub-mirror/install-credentials.py \
   --docker-config /home/weaston/.docker/config.json \
   --output /etc/arc-dockerhub-mirror/credentials.env
-sudo docker compose -f /data/gha-o11yfleet/arc-dockerhub-mirror/compose.yaml up -d
+sudo install -d -m 0755 /usr/local/libexec
+sudo install -m 0755 /data/gha-o11yfleet/arc-dockerhub-mirror/start.sh \
+  /usr/local/libexec/start-arc-dockerhub-mirror
+sudo install -m 0644 /data/gha-o11yfleet/arc-dockerhub-mirror/arc-dockerhub-mirror.service \
+  /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now arc-dockerhub-mirror.service
 curl -fsS http://192.168.122.1:5000/v2/
 ```
 
