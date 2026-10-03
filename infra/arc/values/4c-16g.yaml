@@ -2,7 +2,7 @@ githubConfigUrl: https://github.com/strawgate/o11yfleet
 githubConfigSecret: arc-github-app
 runnerScaleSetName: o11yfleet-4c-16g
 minRunners: 0
-maxRunners: 5
+maxRunners: 6
 containerMode:
   type: dind
 controllerServiceAccount:
