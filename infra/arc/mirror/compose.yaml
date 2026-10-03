@@ -6,7 +6,7 @@ services:
     ports:
       - 192.168.122.1:5000:5000
     env_file:
-      - /etc/arc-dockerhub-mirror/credentials.env
+      - ${ARC_DOCKERHUB_MIRROR_ENV_FILE:-/etc/arc-dockerhub-mirror/credentials.env}
     volumes:
       - ./config.yml:/etc/distribution/config.yml:ro
       - /data/gha-o11yfleet/dockerhub-mirror:/var/lib/registry
