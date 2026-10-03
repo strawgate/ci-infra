@@ -1,0 +1,11 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: arc-docker-daemon-config
+  namespace: arc-runners
+data:
+  daemon.json: |
+    {
+      "registry-mirrors": ["http://192.168.122.1:5000"],
+      "insecure-registries": ["192.168.122.1:5000"]
+    }

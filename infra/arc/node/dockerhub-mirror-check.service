@@ -1,0 +1,8 @@
+[Unit]
+Description=Check ARC Docker Hub mirror health and disk usage
+Wants=network-online.target
+After=network-online.target docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/libexec/check-arc-dockerhub-mirror
