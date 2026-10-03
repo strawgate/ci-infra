@@ -203,7 +203,8 @@ One-time setup:
      sudo KUBECONFIG=/etc/rancher/k3s/k3s.yaml helm install "opamp-clients-${tier}" \
        oci://ghcr.io/actions/actions-runner-controller-charts/gha-runner-scale-set \
        --version 0.14.2 --namespace arc-runners \
-       --values "infra/arc/values/opamp-clients-${tier}.yaml" --wait
+       --values "infra/arc/values/opamp-clients-${tier}.yaml" \
+       --post-renderer /usr/local/libexec/arc-dind-mirror-post-render --wait
    done
    ```
 
@@ -242,6 +243,81 @@ sudo KUBECONFIG=/etc/rancher/k3s/k3s.yaml kubectl create secret docker-registry 
   --namespace arc-runners
 ```
 
+### Shared Docker Hub pull-through cache
+
+The `dind` runner pods also pull Docker Hub's `docker:dind` image. Their
+`imagePullSecrets` include `dockerhub-public-pulls`, a
+`kubernetes.io/dockerconfigjson` secret in `arc-runners` backed by a Docker Hub
+**public-read-only** token. Create the secret on the node before upgrading the
+scale sets. Never commit the token or put it in Helm values.
+
+The pull secret authenticates **k3s image pulls only**. Each job's Docker daemon
+is ephemeral, so a second runner would otherwise download the same Hub layers
+again. One Distribution registry on `docker-host` caches public Hub images for
+all runner daemons. It binds only to the libvirt bridge
+(`192.168.122.1:5000`), stores data on the ARC SSD at
+`/data/gha-o11yfleet/dockerhub-mirror`, and uses the same public-read-only
+Docker Hub login upstream. It does not cache GHCR or pnpm packages, and each
+active daemon still needs its own local layers to run containers.
+
+On `docker-host`, copy `infra/arc/mirror/{compose.yaml,config.yml,install-credentials.py,check.sh,start.sh}`
+to `/data/gha-o11yfleet/arc-dockerhub-mirror/`. The host Docker CLI must first
+be logged in as `strawgatepydantic`. Then install the mirror (the credential
+file is root-owned mode 0600 and must never be committed):
+
+```bash
+sudo install -d -m 0750 /data/gha-o11yfleet/dockerhub-mirror
+sudo python3 /data/gha-o11yfleet/arc-dockerhub-mirror/install-credentials.py \
+  --docker-config /home/weaston/.docker/config.json \
+  --output /etc/arc-dockerhub-mirror/credentials.env
+sudo install -d -m 0755 /usr/local/libexec
+sudo install -m 0755 /data/gha-o11yfleet/arc-dockerhub-mirror/start.sh \
+  /usr/local/libexec/start-arc-dockerhub-mirror
+sudo install -m 0644 /data/gha-o11yfleet/arc-dockerhub-mirror/arc-dockerhub-mirror.service \
+  /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now arc-dockerhub-mirror.service
+curl -fsS http://192.168.122.1:5000/v2/
+```
+
+ARC 0.14.2 injects the DinD sidecar after merging Helm values, so ordinary
+`template.spec` values cannot change its `dockerd` arguments. The pinned-chart
+post-renderer at `infra/arc/node/helm-plugins/arc-dind-mirror/render.sh` adds
+the mirror arguments and fails if the chart's expected sidecar changes. Install
+it in the ARC VM as `/usr/local/libexec/arc-dind-mirror-post-render`, mode 0755,
+and **include `--post-renderer` on every DinD Helm install/upgrade**. The VM
+uses Helm 3 (an executable path); Helm 4 validation uses the adjacent plugin
+manifest and `HELM_PLUGINS`. `just check` renders all five DinD scale sets.
+
+The gh-aw agent pool runs `dockerd` in its runner container instead. Apply
+`infra/arc/node/docker-daemon-configmap.yaml` in `arc-runners` before upgrading
+that pool; its values mount the mirror config at `/etc/docker/daemon.json`.
+
+Distribution expires stale cache content after seven days and requires
+`storage.delete.enabled: true` for its cleanup scheduler. Do not run a blind
+Docker prune: it would affect unrelated stacks and the registry already ages
+out old cache entries. The weekly `dockerhub-mirror-check.timer` checks health,
+cache size (50 GiB review threshold), and free SSD space (200 GiB threshold).
+Copy the service/timer from `infra/arc/node/` alongside the mirror files on
+`docker-host`, then install them:
+
+```bash
+sudo install -d -m 0755 /usr/local/libexec
+sudo install -m 0755 /data/gha-o11yfleet/arc-dockerhub-mirror/check.sh \
+  /usr/local/libexec/check-arc-dockerhub-mirror
+sudo install -m 0644 /data/gha-o11yfleet/arc-dockerhub-mirror/dockerhub-mirror-check.service \
+  /etc/systemd/system/
+sudo install -m 0644 /data/gha-o11yfleet/arc-dockerhub-mirror/dockerhub-mirror-check.timer \
+  /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now dockerhub-mirror-check.timer
+sudo systemctl start dockerhub-mirror-check.service
+```
+
+If the cache grows despite expiry,
+investigate and arrange a quiet, registry-offline garbage collection pass;
+Distribution garbage collection is not safe against concurrent writes.
+
 ### Each update
 
 Bump the tag in all four o11yfleet values files and apply (for the
@@ -249,12 +325,17 @@ opamp-clients ones, see [opamp-clients](#opamp-clients)). No build on the node, 
 `docker save | k3s ctr images import` — k3s pulls the published image.
 
 ```bash
-for tier in 1c-4g 2c-8g 4c-16g agent-2c-8g; do
+for tier in 1c-4g 2c-8g 4c-16g; do
   sudo KUBECONFIG=/etc/rancher/k3s/k3s.yaml helm upgrade "o11yfleet-${tier}" \
     oci://ghcr.io/actions/actions-runner-controller-charts/gha-runner-scale-set \
     --version 0.14.2 --namespace arc-runners \
-    --values "infra/arc/values/${tier}.yaml" --wait
+    --values "infra/arc/values/${tier}.yaml" \
+    --post-renderer /usr/local/libexec/arc-dind-mirror-post-render --wait
 done
+sudo KUBECONFIG=/etc/rancher/k3s/k3s.yaml helm upgrade o11yfleet-agent-2c-8g \
+  oci://ghcr.io/actions/actions-runner-controller-charts/gha-runner-scale-set \
+  --version 0.14.2 --namespace arc-runners \
+  --values infra/arc/values/agent-2c-8g.yaml --wait
 ```
 
 Tags are immutable (`<date>-<short-sha>`), so `imagePullPolicy: IfNotPresent`

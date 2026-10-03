@@ -8,3 +8,5 @@
 *.iso
 *.tfstate
 *.tfstate.*
+__pycache__/
+*.pyc

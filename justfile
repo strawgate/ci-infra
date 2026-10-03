@@ -1,4 +1,7 @@
 # Local validation; deployment is deliberate and documented in infra/arc/README.md.
 check:
     actionlint -shellcheck= .github/workflows/*.yml
-    for values in infra/arc/values/*.yaml; do helm template "$(basename "$values" .yaml)" oci://ghcr.io/actions/actions-runner-controller-charts/gha-runner-scale-set --version 0.14.2 --namespace arc-runners --values "$values" >/dev/null; done
+    shellcheck infra/arc/mirror/check.sh infra/arc/mirror/start.sh infra/arc/node/check-scale-sets.sh infra/arc/node/helm-plugins/arc-dind-mirror/render.sh
+    infra/arc/node/check-scale-sets.sh
+    ARC_DOCKERHUB_MIRROR_ENV_FILE=/dev/null docker compose -f infra/arc/mirror/compose.yaml config --no-env-resolution --quiet
+    python3 -m unittest discover -s infra/arc/mirror -p 'test_*.py'

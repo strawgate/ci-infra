@@ -1,0 +1,22 @@
+services:
+  dockerhub-mirror:
+    image: registry:3.1.1@sha256:325b4b29b041e82803abeb703e201655e4e23ab83264ec1a7c9ddb0a5b14a6e0
+    container_name: arc-dockerhub-mirror
+    restart: unless-stopped
+    ports:
+      - 192.168.122.1:5000:5000
+    env_file:
+      - ${ARC_DOCKERHUB_MIRROR_ENV_FILE:-/etc/arc-dockerhub-mirror/credentials.env}
+    volumes:
+      - ./config.yml:/etc/distribution/config.yml:ro
+      - /data/gha-o11yfleet/dockerhub-mirror:/var/lib/registry
+    healthcheck:
+      test: [CMD, wget, -q, --spider, http://127.0.0.1:5000/v2/]
+      interval: 1m
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    logging:
+      options:
+        max-size: 10m
+        max-file: "3"

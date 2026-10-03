@@ -1,0 +1,18 @@
+[Unit]
+Description=ARC Docker Hub pull-through cache
+Requires=docker.service
+Wants=libvirtd.service network-online.target
+After=docker.service libvirtd.service network-online.target
+RequiresMountsFor=/data/gha-o11yfleet
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/local/libexec/start-arc-dockerhub-mirror
+ExecStop=/usr/bin/docker compose -f /data/gha-o11yfleet/arc-dockerhub-mirror/compose.yaml stop
+TimeoutStartSec=180
+Restart=on-failure
+RestartSec=15
+
+[Install]
+WantedBy=multi-user.target

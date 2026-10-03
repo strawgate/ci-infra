@@ -1,0 +1,8 @@
+[Unit]
+Description=Check ARC Docker Hub mirror health and disk usage
+Requires=arc-dockerhub-mirror.service
+After=arc-dockerhub-mirror.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/libexec/check-arc-dockerhub-mirror

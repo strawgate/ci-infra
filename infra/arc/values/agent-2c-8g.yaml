@@ -29,7 +29,16 @@ template:
         image: ghcr.io/strawgate/ci-infra-o11yfleet-arc-agent-runner:20260929-0f51823
         command: ["/usr/local/bin/start-dockerd.sh"]
         imagePullPolicy: IfNotPresent
+        volumeMounts:
+          - name: docker-daemon-config
+            mountPath: /etc/docker/daemon.json
+            subPath: daemon.json
+            readOnly: true
         securityContext:
           # Required by dockerd and the gh-aw network firewall. This applies
           # only to trusted, GitHub-controlled agent workflow definitions.
           privileged: true
+    volumes:
+      - name: docker-daemon-config
+        configMap:
+          name: arc-docker-daemon-config
