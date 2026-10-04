@@ -20,9 +20,10 @@ account's self-hosted runners
 belong to one repository, so that repository needs scale sets of its own
 rather than sharing these. See [opamp-clients](#opamp-clients).
 
-`o11yfleet-4c-8g` is a bounded memory trial for UI regression/artifact and
+`o11yfleet-4c-8g` is a bounded memory trial for UI regression and
 collector E2E suites. SDK image builds and other heavy jobs retain the
-`o11yfleet-4c-16g` default. The image, pnpm store, Docker Hub mirror, and
+`o11yfleet-4c-16g` default. UI artifact capture also retains that default
+until artifact mode is separately qualified. The image, pnpm store, Docker Hub mirror, and
 Guaranteed CPU placement match the larger pool. Its two-runner cap limits
 the initial trial; the node's resource reservations still bound total fleet
 concurrency. Compare full-job completion and duration, plus pod-level
