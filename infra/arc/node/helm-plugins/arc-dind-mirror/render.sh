@@ -21,6 +21,10 @@ DIND_IMAGE=$DIND_IMAGE awk '
   } else if (line ~ /^- name: /) {
     in_dind = 0
   }
+  if (in_dind && line == "args:") {
+    key = $0
+    sub(/[^[:space:]].*$/, "", key)
+  }
   if (in_dind && line == "image: docker:dind") {
     indent = $0
     sub(/[^[:space:]].*$/, "", indent)
@@ -34,8 +38,9 @@ DIND_IMAGE=$DIND_IMAGE awk '
     sub(/[^[:space:]].*$/, "", indent)
     print indent "- --registry-mirror=http://192.168.122.1:5000"
     print indent "- --insecure-registry=192.168.122.1:5000"
-    # The container keys sit two spaces left of the args items.
-    print substr(indent, 3) "command:"
+    # At the indent of the sidecar args key (Helm 3 indents list items
+    # under their key, Helm 4 does not).
+    print key "command:"
     print indent "- arc-dind-start"
     count++
   }
