@@ -1,0 +1,38 @@
+#!/bin/sh
+# Start dockerd (its arguments are this script's) with Docker's containers inside
+# this runner pod's limits. A privileged container gets the node's cgroup
+# namespace, so without this dockerd puts its containers in the node's
+# /sys/fs/cgroup/docker, unlimited (infra/arc/README.md, "DinD containment").
+#
+# - --cgroup-parent=<pod>/dind: containers sit under the pod's cpu.max and
+#   memory.max, beside its own containers.
+# - <pod>/dind/memory.max, the pod's less 2 GiB (or less a quarter, under 8
+#   GiB): a runaway container is the OOM victim, not the runner.
+# - dockerd's oom_score_adj -900: a pod-wide OOM doesn't take the daemon.
+# - arc-runc as the default runtime: a container that sets no CPU quota gets
+#   the pod's, so it reports the pod's CPU count (arc-runc.jq).
+set -u
+
+cg=$(sed -n 's/^0:://p' /proc/self/cgroup)
+pod=${cg%/*}
+root=/sys/fs/cgroup$pod
+if [ -n "$cg" ] && [ -d "$root" ] && mkdir -p "$root/dind"; then
+  limit=$(cat "$root/memory.max")
+  if [ "$limit" != max ]; then
+    reserve=$((2 << 30))
+    if [ $((limit / 4)) -lt "$reserve" ]; then reserve=$((limit / 4)); fi
+    echo $((limit - reserve)) > "$root/dind/memory.max"
+  fi
+  echo -900 > /proc/self/oom_score_adj
+  set -- "$@" --cgroup-parent="$pod/dind"
+  read -r quota period < "$root/cpu.max"
+  if [ "$quota" != max ]; then
+    mkdir -p /etc/arc-dind
+    echo "$quota $period" > /etc/arc-dind/cpu.max
+    set -- "$@" --add-runtime=arc=/usr/local/bin/arc-runc --default-runtime=arc
+  fi
+  echo "arc-dind: containers in $pod/dind, memory.max $(cat "$root/dind/memory.max"), cpu.max $quota $period"
+else
+  echo "arc-dind: no cgroup v2 pod cgroup found; Docker's containers are not contained" >&2
+fi
+exec dockerd-entrypoint.sh "$@"

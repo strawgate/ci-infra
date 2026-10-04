@@ -30,6 +30,13 @@ template:
         image: ghcr.io/strawgate/ci-infra-o11yfleet-arc-runner:20260929-0f51823
         command: ["/home/runner/run.sh"]
         imagePullPolicy: IfNotPresent
+        env:
+          # The pod's CPU count for what doesn't read the cgroup quota: os.cpu_count
+          # and Go before 1.25 (infra/arc/README.md, "DinD containment").
+          - name: PYTHON_CPU_COUNT
+            value: "1"
+          - name: GOMAXPROCS
+            value: "1"
         # Shared pnpm store on the node, so `pnpm install` reads packages from
         # local disk instead of restoring a 337MB Actions cache over the
         # node's slow uplink. Mount only: jobs opt in through
