@@ -288,6 +288,12 @@ all runner daemons. It binds only to the libvirt bridge
 Docker Hub login upstream. It does not cache GHCR or pnpm packages, and each
 active daemon still needs its own local layers to run containers.
 
+Workflow `docker/login-action` steps authenticate directly to Docker Hub, not
+through the mirror. Their repository `DOCKERHUB_TOKEN` secret and
+`DOCKERHUB_USERNAME` variable are separate from the mirror credentials and the
+k3s pull secret; rotating one does not update the others. The username must
+match the token's Docker Hub account (`strawgatepydantic` for this fleet).
+
 On `docker-host`, copy `infra/arc/mirror/{compose.yaml,config.yml,install-credentials.py,check.sh,start.sh}`
 to `/data/gha-o11yfleet/arc-dockerhub-mirror/`. The host Docker CLI must first
 be logged in as `strawgatepydantic`. Then install the mirror (the credential
