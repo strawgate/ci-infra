@@ -4,7 +4,7 @@ githubConfigUrl: https://github.com/strawgate/opamp-clients
 githubConfigSecret: arc-github-app
 runnerScaleSetName: opamp-clients-4c-16g
 minRunners: 0
-maxRunners: 5
+maxRunners: 7
 containerMode:
   type: dind
 controllerServiceAccount:
