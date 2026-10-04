@@ -1,0 +1,36 @@
+# Smaller-memory trial for UI and collector E2E suites; SDK E2E stays on 4c-16g.
+githubConfigUrl: https://github.com/strawgate/o11yfleet
+githubConfigSecret: arc-github-app
+runnerScaleSetName: o11yfleet-4c-8g
+minRunners: 0
+maxRunners: 2
+containerMode:
+  type: dind
+controllerServiceAccount:
+  namespace: arc-systems
+  name: arc-gha-rs-controller
+template:
+  spec:
+    resources:
+      requests:
+        cpu: "4"
+        memory: 8Gi
+      limits:
+        cpu: "4"
+        memory: 8Gi
+    imagePullSecrets:
+      - name: ghcr
+      - name: dockerhub-public-pulls
+    containers:
+      - name: runner
+        image: ghcr.io/strawgate/ci-infra-o11yfleet-arc-runner:20260929-0f51823
+        command: ["/home/runner/run.sh"]
+        imagePullPolicy: IfNotPresent
+        volumeMounts:
+          - name: pnpm-store
+            mountPath: /home/runner/.pnpm-store-shared
+    volumes:
+      - name: pnpm-store
+        hostPath:
+          path: /var/cache/o11yfleet/pnpm-store
+          type: Directory

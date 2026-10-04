@@ -10,13 +10,25 @@ to this repository.
 | `o11yfleet-1c-4g`       |  1 vCPU / 4 GiB |               2 | lightweight coordination              |
 | `o11yfleet-2c-8g`       |  2 vCPU / 8 GiB |              10 | default CI                            |
 | `o11yfleet-agent-2c-8g` |  2 vCPU / 8 GiB |               1 | trusted gh-aw agent workflows         |
+| `o11yfleet-4c-8g`       |  4 vCPU / 8 GiB |               2 | UI and collector E2E memory trial     |
 | `o11yfleet-4c-16g`      | 4 vCPU / 16 GiB |               6 | E2E, mutation, and deploy-gating work |
 
-The same node also runs two scale sets for **strawgate/opamp-clients**
-(`opamp-clients-2c-8g`, up to 8 runners, and `opamp-clients-4c-16g`, up to
-7). strawgate is a user account, and a user account's self-hosted runners
+The same node also runs three scale sets for **strawgate/opamp-clients**:
+`opamp-clients-1c-2g` (up to 2), `opamp-clients-2c-8g` (up to 8), and
+`opamp-clients-4c-16g` (up to 7). strawgate is a user account, and a user
+account's self-hosted runners
 belong to one repository, so that repository needs scale sets of its own
 rather than sharing these. See [opamp-clients](#opamp-clients).
+
+`o11yfleet-4c-8g` is a bounded memory trial for UI regression/artifact and
+collector E2E suites. SDK image builds and other heavy jobs retain the
+`o11yfleet-4c-16g` default. The image, pnpm store, Docker Hub mirror, and
+Guaranteed CPU placement match the larger pool. Its two-runner cap limits
+the initial trial; the node's resource reservations still bound total fleet
+concurrency. Compare full-job completion and duration, plus pod-level
+`memory.events`, before moving any additional job types. Roll back routing
+to `o11yfleet-4c-16g` on OOMs or material slowdowns. Install `values/4c-8g.yaml`
+with the pinned chart and DinD mirror post-renderer before merging routing.
 
 `runner/Dockerfile` extends the official ARC runner image with the runtime
 tools required before a workflow can install its own dependencies: Node 22,
@@ -175,12 +187,37 @@ ARC base and adds what that repository's jobs expected of GitHub-hosted
 
 It has no pnpm store mount: that repository doesn't use pnpm.
 
-Its jobs share the node with this fleet's. The 2-core cap is 6, and the 4-core
-cap is being trialed at 5 (up from 4). The pod-level CPU and memory requests
+The 1-core pool runs change detection, requirements, Python checker tests,
+and shell result gates. These jobs need no Docker daemon, so its template
+omits `containerMode: dind`. Its CPU and memory requests equal its limits
+(1 vCPU and 2 GiB), preserving the static CPU manager's allocation while
+reserving less memory than a conformance runner. Proofs and conformance
+remain on the 2-core and 4-core pools.
+
+Each OpAMP runner also sets
+[`PYTHON_CPU_COUNT`](https://docs.python.org/3.13/using/cmdline.html#envvar-PYTHON_CPU_COUNT)
+to its CPU allocation. Python 3.13 and newer honor this when code asks
+`os.cpu_count()`, which otherwise
+reports all 56 VM CPUs despite the runner's affinity. This also bounds older
+branches' proof scripts as new runner pods start. Python versions before
+3.13 need the affinity-aware worker count in the repository's scripts.
+
+Its jobs share the node with this fleet's. The 2-core cap is 8, and the 4-core
+cap is 7. The pod-level CPU and memory requests
 remain equal to their limits, so Kubernetes leaves excess runner pods Pending
 when the node is full. Watch o11yfleet queue time and node scheduling during
-overlapping runs; return the 4-core cap to 4 if OpAMP delays o11yfleet CI. Past
+overlapping runs. Past
 the caps, jobs remain queued at GitHub.
+
+As of 2026-10-04, `opamp-clients-4c-16g` is trialing **4 CPUs / 12 GiB**;
+the existing runner label is retained so workflows need no routing change.
+Both memory requests and limits are 12 GiB, preserving Guaranteed QoS and
+dedicated CPU placement. The seven-runner cap from main, image, and other pools
+are preserved. This saves 4 GiB of scheduling reservation per new runner (28 GiB
+at the cap); existing jobs retain their original resources until completion.
+Observed pod peaks included substantial file cache, so judge the trial by
+full-job completion, duration, and cgroup `memory.events`, not peak usage
+alone. Roll back both memory values to 16 GiB if jobs OOM or slow materially.
 
 A 2-core trial at 10 (2026-09-28) was rolled back the next day. From about
 20:20 UTC that day, o11yfleet's end-to-end suites timed out on every run:
@@ -196,7 +233,18 @@ One-time setup:
    Settings → Applications → the ARC app → Configure → Repository access, add
    the repository. The installation, and so the `arc-github-app` secret,
    stays the same.
-2. Install the two scale sets:
+2. Install the three scale sets:
+
+   Install the lightweight pool without the DinD post-renderer:
+
+   ```bash
+   sudo KUBECONFIG=/etc/rancher/k3s/k3s.yaml helm upgrade --install opamp-clients-1c-2g \
+     oci://ghcr.io/actions/actions-runner-controller-charts/gha-runner-scale-set \
+     --version 0.14.2 --namespace arc-runners \
+     --values infra/arc/values/opamp-clients-1c-2g.yaml --wait
+   ```
+
+   Install the two Docker-backed pools with the post-renderer:
 
    ```bash
    for tier in 2c-8g 4c-16g; do
@@ -212,8 +260,9 @@ One-time setup:
    `sudo k3s kubectl get autoscalingrunnersets -n arc-runners`.
    They should also appear under the repository's Settings → Actions → Runners.
 
-To update, bump the tag in both `values/opamp-clients-*.yaml` files and run
-`helm upgrade`, as with the others below.
+To update, bump the tag in all three `values/opamp-clients-*.yaml` files and
+run `helm upgrade`. The lightweight pool uses the native Helm command above;
+the two Docker-backed pools need the DinD post-renderer.
 
 ## Deploying an image update
 
@@ -259,6 +308,12 @@ all runner daemons. It binds only to the libvirt bridge
 `/data/gha-o11yfleet/dockerhub-mirror`, and uses the same public-read-only
 Docker Hub login upstream. It does not cache GHCR or pnpm packages, and each
 active daemon still needs its own local layers to run containers.
+
+Workflow `docker/login-action` steps authenticate directly to Docker Hub, not
+through the mirror. Their repository `DOCKERHUB_TOKEN` secret and
+`DOCKERHUB_USERNAME` variable are separate from the mirror credentials and the
+k3s pull secret; rotating one does not update the others. The username must
+match the token's Docker Hub account (`strawgatepydantic` for this fleet).
 
 On `docker-host`, copy `infra/arc/mirror/{compose.yaml,config.yml,install-credentials.py,check.sh,start.sh}`
 to `/data/gha-o11yfleet/arc-dockerhub-mirror/`. The host Docker CLI must first
