@@ -338,9 +338,10 @@ curl -fsS http://192.168.122.1:5000/v2/
 ARC 0.14.2 injects the DinD sidecar after merging Helm values, so ordinary
 `template.spec` values cannot change its `dockerd` arguments. The pinned-chart
 post-renderer at `infra/arc/node/helm-plugins/arc-dind-mirror/render.sh` adds
-the mirror arguments, wraps the sidecar's start so Docker's containers stay
-inside the pod (see [DinD containment](#dind-containment)), and fails if the
-chart's expected sidecar changes. Install
+the mirror arguments, swaps the sidecar's image for `ci-infra-arc-dind`
+(`infra/arc/dind`) started by `arc-dind-start` (see
+[DinD containment](#dind-containment)), and fails if the chart's expected
+sidecar changes. Bump `DIND_IMAGE` in `render.sh` for a new image. Install
 it in the ARC VM as `/usr/local/libexec/arc-dind-mirror-post-render`, mode 0755,
 and **include `--post-renderer` on every DinD Helm install/upgrade**. The VM
 uses Helm 3 (an executable path); Helm 4 validation uses the adjacent plugin
@@ -385,7 +386,8 @@ Kubernetes. Measured on 2026-10-04: that cgroup had used ~36 CPU-hours in 21
 hours, and held 81 leaked container cgroups. The image's own cgroup-v2 setup
 also runs against the node's root (it created `/sys/fs/cgroup/init` there).
 
-The post-renderer's wrapper, before the image's entrypoint:
+The sidecar runs our image, `infra/arc/dind` (`docker:dind` plus `jq` and
+three files), through `arc-dind-start`, which before the image's entrypoint:
 
 - reads the sidecar's cgroup and starts `dockerd --cgroup-parent=<pod>/dind`,
   so containers are siblings of the pod's own containers, under the pod's
@@ -397,17 +399,34 @@ The post-renderer's wrapper, before the image's entrypoint:
   containers 0, and `memory.oom.group` kills the whole runner container). With
   it, only processes under `dind` are candidates;
 - sets `dockerd`'s `oom_score_adj` to -900, so a pod-wide OOM doesn't take the
-  daemon (and, by `memory.oom.group`, the whole sidecar).
+  daemon (and, by `memory.oom.group`, the whole sidecar);
+- makes `arc-runc` dockerd's default runtime: runc, except that a container
+  that sets no CPU quota of its own is created with the pod's (`arc-runc.jq`),
+  and with `GOMAXPROCS` and `PYTHON_CPU_COUNT` set to the pod's CPU count unless
+  it sets them. A container's cgroup namespace starts at the container, so it
+  can't see the pod's quota; its own is what runtimes read.
+
+What a container reports, measured in a contained 2-CPU pod on 2026-10-04:
+
+| The container has | Go 1.25 | Java 21 | Node 22 | Python `process_cpu_count` / `cpu_count` | `nproc` |
+|---|---|---|---|---|---|
+| nothing (containment alone) | 56 | 56 | 56 | 56 / 56 | 56 |
+| its own quota (`arc-runc`, or `--cpus 2`) | 2 | 2 | 2 | 56 / 56 | 56 |
+| `--cgroupns host` | 56 | 2 | 2 | 56 / 56 | 56 |
+| `--cpuset-cpus 0-1` | 2 | 2 | 2 | 2 / 56 | 2 |
+
+So Python reads `PYTHON_CPU_COUNT` (3.13+), Go before 1.25 reads `GOMAXPROCS`,
+and `nproc` (affinity only) still says 56: only pinning changes it. In the
+runner container itself kubelet already sets the pod's quota on the
+container's cgroup, so the values files only add the same two variables.
 
 Tested in throwaway pods (2 CPU, 4 and 8 GiB): four busy-loop containers held
-to ~1.9 CPUs; a 6 GiB allocation killed only its container; the pod's cgroup
-tree is removed on delete even with a container running. Containers still
-see 56 CPUs in `nproc` and an unlimited `cpu.max` of their own (their cgroup
-namespace starts at the container), so jobs that size thread pools from the
-CPU count need it passed in (`GOMAXPROCS`, `PYTHON_CPU_COUNT`).
+to ~1.9 CPUs, and `docker build` steps too; a 6 GiB allocation killed only its
+container; the pod's cgroup tree is removed on delete even with a container
+running. `infra/arc/dind/test_arc_runc.py` covers the runtime wrapper.
 
 To check a runner: `kubectl logs <pod> -c dind | grep arc-dind` prints the
-cgroup and limit; nothing new should appear under the node's
+cgroup and limits; nothing new should appear under the node's
 `/sys/fs/cgroup/docker`; OOM kills show in `<pod cgroup>/dind/memory.events`.
 The gh-aw agent pool runs `dockerd` in its runner container and is not
 covered.

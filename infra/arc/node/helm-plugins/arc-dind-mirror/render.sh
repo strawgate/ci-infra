@@ -10,7 +10,7 @@
 #   CPU count (infra/arc/README.md, "DinD containment").
 set -eu
 
-DIND_IMAGE=ghcr.io/strawgate/ci-infra-arc-dind:TAG
+DIND_IMAGE=ghcr.io/strawgate/ci-infra-arc-dind:20261004-e0fda7a
 
 DIND_IMAGE=$DIND_IMAGE awk '
 {
