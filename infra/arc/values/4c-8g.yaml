@@ -11,6 +11,14 @@ controllerServiceAccount:
   name: arc-gha-rs-controller
 template:
   spec:
+    runtimeClassName: kata-clh-runtime-rs
+    nodeSelector:
+      ci-infra/kata-worker: "true"
+    tolerations:
+      - key: ci-infra/kata-only
+        operator: Equal
+        value: "true"
+        effect: NoSchedule
     resources:
       requests:
         cpu: "4"
@@ -32,5 +40,5 @@ template:
     volumes:
       - name: pnpm-store
         hostPath:
-          path: /var/cache/o11yfleet/pnpm-store
+          path: /data/gha-o11yfleet/arc-kata/pnpm-store
           type: Directory

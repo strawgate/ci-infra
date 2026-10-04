@@ -1,5 +1,5 @@
-# Pilot only: at most eight schedulable CPUs and about 26 GiB on this 72-CPU,
-# 314-GiB host. Existing VM workers continue to use their own reservations.
+# Physical CI worker: 56 schedulable CPUs and about 192 GiB. The OS keeps
+# 0-3,36-39; the eight-vCPU control-plane VM is pinned to 8-11,44-47.
 server: https://192.168.122.27:6443
 token-file: /etc/rancher/k3s/arc-join-token
 node-name: docker-host-kata
@@ -10,12 +10,17 @@ node-label:
 node-taint:
   - ci-infra/kata-only=true:NoSchedule
 kubelet-arg:
-  - address=192.168.122.1
+  # The k3s reverse tunnel dials the kubelet via loopback. Restrict exposure
+  # with the dedicated INPUT chain instead of breaking that tunnel's listener.
+  - address=0.0.0.0
   - cpu-manager-policy=static
-  - reserved-cpus=0-3,8-39,44-71
+  - cgroup-driver=cgroupfs
+  - topology-manager-scope=pod
+  - topology-manager-policy=best-effort
+  - reserved-cpus=0-3,8-11,36-39,44-47
   - feature-gates=PodLevelResourceManagers=true
-  - system-reserved=cpu=64,memory=288Gi
+  - system-reserved=cpu=16,memory=122Gi
   - eviction-hard=memory.available<2Gi,nodefs.available<15%,imagefs.available<15%
   - image-gc-high-threshold=75
   - image-gc-low-threshold=65
-  - max-pods=24
+  - max-pods=80

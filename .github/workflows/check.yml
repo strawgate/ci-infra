@@ -24,8 +24,16 @@ jobs:
         run: go run github.com/rhysd/actionlint/cmd/actionlint@v1.7.12 -shellcheck= .github/workflows/*.yml
       - name: Validate mirror scripts
         run: shellcheck infra/arc/mirror/check.sh infra/arc/mirror/start.sh infra/arc/node/check-scale-sets.sh infra/arc/node/helm-plugins/arc-dind-mirror/render.sh
+      - name: Install manifest validation dependency
+        run: python3 -m pip install PyYAML==6.0.3
       - name: Render every pinned scale set
         run: infra/arc/node/check-scale-sets.sh
+      - name: Validate Kata runtime and smoke test
+        run: |
+          python3 -m unittest discover -s infra/arc/kata -p 'test_*.py'
+          HELM_PLUGINS="$PWD/infra/arc/node/helm-plugins" python3 infra/arc/kata/check.py
+          node --check infra/arc/kata/smoke.js
+          shellcheck infra/arc/kata/install-worker-stopped.sh infra/arc/kata/firewall.sh infra/arc/kata/deploy-runners.sh
       - name: Validate Docker Hub mirror
         run: |
           ARC_DOCKERHUB_MIRROR_ENV_FILE=/dev/null docker compose -f infra/arc/mirror/compose.yaml config --no-env-resolution --quiet

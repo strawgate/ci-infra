@@ -1,6 +1,8 @@
 # Kata 4.2.0. Install only on the bare-metal worker, never the existing ARC VM.
 deploymentMode: job
 k8sDistribution: k3s
+defaultShim:
+  amd64: clh-runtime-rs
 imagePullPolicy: IfNotPresent
 image:
   reference: quay.io/kata-containers/kata-deploy
@@ -33,10 +35,14 @@ shims:
       overhead_vcpus = 0.0
       overhead_memory = 512
       [runtime]
+      sandbox_cgroup_only = true
       static_sandbox_resource_mgmt = true
+      emptydir_mode = "block-plain"
     runtimeClass:
       nodeSelector:
         ci-infra/kata-worker: "true"
       overhead:
-        cpu: 250m
+        # Keep an integer pod CPU budget for static CPU-manager placement.
+        # Guest/runtime CPU overhead shares the requested vCPUs.
+        cpu: "0"
         memory: 768Mi

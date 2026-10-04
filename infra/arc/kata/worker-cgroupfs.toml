@@ -1,0 +1,5 @@
+# Dedicated Kata worker: keep the fallback runc driver consistent with kubelet.
+# Kata's FsManager avoids the runtime-rs/systemd CPU-mask mismatch found in
+# qualification. This does not change the physical host's Docker daemon.
+[plugins.'io.containerd.cri.v1.runtime'.containerd.runtimes.runc.options]
+SystemdCgroup = false

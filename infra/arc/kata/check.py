@@ -17,12 +17,18 @@ def render(chart, version, values, *args):
 
 
 def main():
+    settings = yaml.safe_load((ROOT / "kata-values.yaml").read_text())
+    assert settings["defaultShim"]["amd64"] == "clh-runtime-rs"
+    assert 'emptydir_mode = "block-plain"' in settings["shims"]["clh-runtime-rs"]["dropIn"]
+    assert 'sandbox_cgroup_only = true' in settings["shims"]["clh-runtime-rs"]["dropIn"]
     worker = yaml.safe_load((ROOT / "worker-config.yaml").read_text())
     assert worker["node-name"] == "docker-host-kata"
     assert worker["node-ip"] == "192.168.122.1"
     assert worker["node-taint"] == ["ci-infra/kata-only=true:NoSchedule"]
-    assert "reserved-cpus=0-3,8-39,44-71" in worker["kubelet-arg"]
-    assert "system-reserved=cpu=64,memory=288Gi" in worker["kubelet-arg"]
+    assert "reserved-cpus=0-3,8-11,36-39,44-47" in worker["kubelet-arg"]
+    assert "system-reserved=cpu=16,memory=122Gi" in worker["kubelet-arg"]
+    assert "cgroup-driver=cgroupfs" in worker["kubelet-arg"]
+    assert "topology-manager-scope=pod" in worker["kubelet-arg"]
     docs = render("oci://ghcr.io/kata-containers/kata-deploy-charts/kata-deploy",
                   "4.2.0", "kata-values.yaml")
     classes = [doc for doc in docs if doc["kind"] == "RuntimeClass"]
@@ -30,10 +36,10 @@ def main():
     runtime = classes[0]
     assert runtime["metadata"]["name"] == "kata-clh-runtime-rs"
     assert runtime["scheduling"]["nodeSelector"]["ci-infra/kata-worker"] == "true"
-    assert runtime["overhead"]["podFixed"] == {"cpu": "250m", "memory": "768Mi"}
+    assert runtime["overhead"]["podFixed"] == {"cpu": "0", "memory": "768Mi"}
 
     docs = render("oci://ghcr.io/actions/actions-runner-controller-charts/gha-runner-scale-set",
-                  "0.14.2", "runner-values.yaml", "--post-renderer", "arc-dind-mirror")
+                  "0.14.2", "runner-values.yaml", "--post-renderer", "arc-kata")
     sets = [doc for doc in docs if doc["kind"] == "AutoscalingRunnerSet"]
     assert len(sets) == 1
     spec = sets[0]["spec"]
@@ -47,6 +53,13 @@ def main():
     assert dind["restartPolicy"] == "Always"
     assert "--registry-mirror=http://192.168.122.1:5000" in dind["args"]
     assert dind["securityContext"]["privileged"]
+    assert pod["securityContext"]["fsGroup"] == 1001
+    runner = next(c for c in pod["containers"] if c["name"] == "runner")
+    assert next(e for e in runner["env"] if e["name"] == "DOCKER_HOST")["value"] == "unix:///var/run/docker.sock"
+    assert next(v for v in pod["volumes"] if v["name"] == "docker-store")["emptyDir"]["sizeLimit"] == "32Gi"
+    ownership = pod["initContainers"][0]
+    assert ownership["name"] == "kata-volume-ownership"
+    assert all(v["name"] != "pnpm-store" for v in ownership["volumeMounts"])
     assert pod["tolerations"] == [{
         "key": "ci-infra/kata-only", "operator": "Equal",
         "value": "true", "effect": "NoSchedule",
@@ -54,10 +67,25 @@ def main():
     for volume in pod["volumes"]:
         if "hostPath" in volume:
             assert volume["hostPath"]["path"] == "/data/gha-o11yfleet/arc-kata/pnpm-store"
-    if "--smoke-pod" in sys.argv:
+    if "--agent-smoke-pod" in sys.argv:
+        docs = render("oci://ghcr.io/actions/actions-runner-controller-charts/gha-runner-scale-set",
+                      "0.14.2", "../values/agent-2c-8g.yaml", "--post-renderer", "arc-kata")
+        spec = next(d["spec"] for d in docs if d["kind"] == "AutoscalingRunnerSet")
+        pod = spec["template"]["spec"]
+        runner = pod["containers"][0]
+        runner["command"] = ["bash", "-c",
+            "sudo dockerd --host=unix:///var/run/docker.sock --group=123 --storage-driver=vfs "
+            ">/tmp/dockerd.log 2>&1 & exec sleep 1800"]
+        pod["serviceAccountName"] = "default"
+        pod["automountServiceAccountToken"] = False
+        yaml.safe_dump({"apiVersion": "v1", "kind": "Pod", "metadata": {
+            "name": "kata-agent-smoke", "namespace": "arc-runners"}, "spec": pod}, sys.stdout)
+    elif "--smoke-pod" in sys.argv:
         # Exact chart-generated runner/DinD topology without registering a runner.
         runner = next(c for c in pod["containers"] if c["name"] == "runner")
         runner["command"] = ["sleep", "1800"]
+        pod["serviceAccountName"] = "default"
+        pod["automountServiceAccountToken"] = False
         yaml.safe_dump({"apiVersion": "v1", "kind": "Pod", "metadata": {
             "name": "kata-runner-smoke", "namespace": "arc-runners"}, "spec": pod}, sys.stdout)
     else:

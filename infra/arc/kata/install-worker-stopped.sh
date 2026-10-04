@@ -32,6 +32,9 @@ install -d -o 1001 -g 1001 -m 0755 "$data/pnpm-store"
 ln -s "$data/k3s" /var/lib/rancher/k3s
 ln -s "$data/kubelet" /var/lib/kubelet
 install -m 0644 "$stage/worker-config.yaml" /etc/rancher/k3s/config.yaml
+install -d -m 0755 "$data/k3s/agent/etc/containerd/config-v3.toml.d"
+install -m 0644 "$stage/worker-cgroupfs.toml" \
+  "$data/k3s/agent/etc/containerd/config-v3.toml.d/99-worker-cgroupfs.toml"
 install -m 0755 "$stage/assets/k3s" /usr/local/bin/k3s
 INSTALL_K3S_EXEC=agent INSTALL_K3S_SKIP_DOWNLOAD=true \
   INSTALL_K3S_SKIP_ENABLE=true INSTALL_K3S_SKIP_START=true \
