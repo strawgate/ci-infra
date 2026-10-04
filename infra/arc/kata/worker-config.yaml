@@ -1,0 +1,21 @@
+# Pilot only: at most eight schedulable CPUs and about 26 GiB on this 72-CPU,
+# 314-GiB host. Existing VM workers continue to use their own reservations.
+server: https://192.168.122.27:6443
+token-file: /etc/rancher/k3s/arc-join-token
+node-name: docker-host-kata
+node-ip: 192.168.122.1
+flannel-iface: virbr0
+node-label:
+  - ci-infra/kata-worker=true
+node-taint:
+  - ci-infra/kata-only=true:NoSchedule
+kubelet-arg:
+  - address=192.168.122.1
+  - cpu-manager-policy=static
+  - reserved-cpus=0-3,8-39,44-71
+  - feature-gates=PodLevelResourceManagers=true
+  - system-reserved=cpu=64,memory=288Gi
+  - eviction-hard=memory.available<2Gi,nodefs.available<15%,imagefs.available<15%
+  - image-gc-high-threshold=75
+  - image-gc-low-threshold=65
+  - max-pods=24
