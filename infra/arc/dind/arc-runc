@@ -1,0 +1,31 @@
+#!/bin/sh
+# dockerd's default runtime (arc-dind-start): runc, except that `create` (and
+# `run`) first gives a container that sets no CPU quota of its own the pod's
+# quota, and GOMAXPROCS and PYTHON_CPU_COUNT if its environment sets neither
+# (arc-runc.jq). If that edit fails, the container starts as Docker asked.
+runc=${ARC_RUNC_RUNC:-/usr/local/bin/runc}
+conf=${ARC_RUNC_CONF:-/etc/arc-dind/cpu.max}
+filter=${ARC_RUNC_FILTER:-/usr/local/share/arc-dind/arc-runc.jq}
+
+bundle=
+create=
+prev=
+for arg in "$@"; do
+  case $prev in --bundle | -b) bundle=$arg ;; esac
+  case $arg in
+    create | run) create=1 ;;
+    --bundle=*) bundle=${arg#--bundle=} ;;
+  esac
+  prev=$arg
+done
+
+spec=$bundle/config.json
+if [ -n "$create" ] && [ -n "$bundle" ] && [ -f "$spec" ] && [ -f "$conf" ]; then
+  read -r quota period < "$conf"
+  if jq -c --argjson quota "$quota" --argjson period "$period" -f "$filter" "$spec" > "$spec.arc" 2>/dev/null; then
+    mv "$spec.arc" "$spec"
+  else
+    rm -f "$spec.arc"
+  fi
+fi
+exec "$runc" "$@"

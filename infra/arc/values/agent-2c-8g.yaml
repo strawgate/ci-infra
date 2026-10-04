@@ -37,6 +37,13 @@ template:
         image: ghcr.io/strawgate/ci-infra-o11yfleet-arc-agent-runner:20260929-0f51823
         command: ["/usr/local/bin/start-dockerd.sh"]
         imagePullPolicy: IfNotPresent
+        env:
+          # The pod's CPU count for what doesn't read the cgroup quota: os.cpu_count
+          # and Go before 1.25 (infra/arc/README.md, "DinD containment").
+          - name: PYTHON_CPU_COUNT
+            value: "2"
+          - name: GOMAXPROCS
+            value: "2"
         volumeMounts:
           - name: docker-daemon-config
             mountPath: /etc/docker

@@ -34,3 +34,5 @@ template:
         env:
           - name: PYTHON_CPU_COUNT
             value: "1"
+          - name: GOMAXPROCS
+            value: "1"

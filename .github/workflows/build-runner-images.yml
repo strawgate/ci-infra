@@ -9,6 +9,7 @@ on:
       - infra/arc/runner/**
       - infra/arc/agent-runner/**
       - infra/arc/opamp-clients-runner/**
+      - infra/arc/dind/**
       - .github/workflows/build-runner-images.yml
   workflow_dispatch:
 
@@ -30,6 +31,8 @@ jobs:
             context: infra/arc/agent-runner
           - name: opamp-clients-arc-runner
             context: infra/arc/opamp-clients-runner
+          - name: arc-dind
+            context: infra/arc/dind
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - id: tag
