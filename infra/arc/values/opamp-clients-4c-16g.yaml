@@ -1,5 +1,6 @@
 # strawgate/opamp-clients' heavy runners: release test builds, Kani, Miri and
 # coverage, TLC. See "opamp-clients" in infra/arc/README.md.
+# The existing label is retained during the 12-GiB memory trial.
 githubConfigUrl: https://github.com/strawgate/opamp-clients
 githubConfigSecret: arc-github-app
 runnerScaleSetName: opamp-clients-4c-16g
@@ -15,10 +16,10 @@ template:
     resources:
       requests:
         cpu: "4"
-        memory: 16Gi
+        memory: 12Gi
       limits:
         cpu: "4"
-        memory: 16Gi
+        memory: 12Gi
     # A private GHCR package: needs the `ghcr` pull secret (infra/arc/README.md).
     imagePullSecrets:
       - name: ghcr

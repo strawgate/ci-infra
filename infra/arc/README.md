@@ -198,6 +198,16 @@ when the node is full. Watch o11yfleet queue time and node scheduling during
 overlapping runs; return the 4-core cap to 4 if OpAMP delays o11yfleet CI. Past
 the caps, jobs remain queued at GitHub.
 
+As of 2026-10-04, `opamp-clients-4c-16g` is trialing **4 CPUs / 12 GiB**;
+the existing runner label is retained so workflows need no routing change.
+Both memory requests and limits are 12 GiB, preserving Guaranteed QoS and
+dedicated CPU placement. The five-runner cap, image, and other pools are
+unchanged. This saves 4 GiB of scheduling reservation per new runner (20 GiB
+at the cap); existing jobs retain their original resources until completion.
+Observed pod peaks included substantial file cache, so judge the trial by
+full-job completion, duration, and cgroup `memory.events`, not peak usage
+alone. Roll back both memory values to 16 GiB if jobs OOM or slow materially.
+
 A 2-core trial at 10 (2026-09-28) was rolled back the next day. From about
 20:20 UTC that day, o11yfleet's end-to-end suites timed out on every run:
 opamp-clients conformance jobs on the node went from 5-10 an hour to 50-60,
