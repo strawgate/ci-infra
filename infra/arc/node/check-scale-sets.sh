@@ -14,7 +14,7 @@ render_scale_set() {
 }
 
 for values in "$repo_root"/infra/arc/values/*.yaml; do
-  if [[ "$values" == *agent-2c-8g.yaml ]]; then
+  if [[ "$values" == *agent-2c-8g.yaml || "$values" == *opamp-clients-1c-2g.yaml ]]; then
     render_scale_set "$values"
   else
     render_scale_set "$values" --post-renderer arc-dind-mirror

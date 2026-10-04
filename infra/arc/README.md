@@ -12,9 +12,10 @@ to this repository.
 | `o11yfleet-agent-2c-8g` |  2 vCPU / 8 GiB |               1 | trusted gh-aw agent workflows         |
 | `o11yfleet-4c-16g`      | 4 vCPU / 16 GiB |               6 | E2E, mutation, and deploy-gating work |
 
-The same node also runs two scale sets for **strawgate/opamp-clients**
-(`opamp-clients-2c-8g`, up to 8 runners, and `opamp-clients-4c-16g`, up to
-7). strawgate is a user account, and a user account's self-hosted runners
+The same node also runs three scale sets for **strawgate/opamp-clients**:
+`opamp-clients-1c-2g` (up to 2), `opamp-clients-2c-8g` (up to 8), and
+`opamp-clients-4c-16g` (up to 7). strawgate is a user account, and a user
+account's self-hosted runners
 belong to one repository, so that repository needs scale sets of its own
 rather than sharing these. See [opamp-clients](#opamp-clients).
 
@@ -175,6 +176,21 @@ ARC base and adds what that repository's jobs expected of GitHub-hosted
 
 It has no pnpm store mount: that repository doesn't use pnpm.
 
+The 1-core pool runs change detection, requirements, Python checker tests,
+and shell result gates. These jobs need no Docker daemon, so its template
+omits `containerMode: dind`. Its CPU and memory requests equal its limits
+(1 vCPU and 2 GiB), preserving the static CPU manager's allocation while
+reserving less memory than a conformance runner. Proofs and conformance
+remain on the 2-core and 4-core pools.
+
+Each OpAMP runner also sets
+[`PYTHON_CPU_COUNT`](https://docs.python.org/3.13/using/cmdline.html#envvar-PYTHON_CPU_COUNT)
+to its CPU allocation. Python 3.13 and newer honor this when code asks
+`os.cpu_count()`, which otherwise
+reports all 56 VM CPUs despite the runner's affinity. This also bounds older
+branches' proof scripts as new runner pods start. Python versions before
+3.13 need the affinity-aware worker count in the repository's scripts.
+
 Its jobs share the node with this fleet's. The 2-core cap is 6, and the 4-core
 cap is being trialed at 5 (up from 4). The pod-level CPU and memory requests
 remain equal to their limits, so Kubernetes leaves excess runner pods Pending
@@ -196,7 +212,18 @@ One-time setup:
    Settings → Applications → the ARC app → Configure → Repository access, add
    the repository. The installation, and so the `arc-github-app` secret,
    stays the same.
-2. Install the two scale sets:
+2. Install the three scale sets:
+
+   Install the lightweight pool without the DinD post-renderer:
+
+   ```bash
+   sudo KUBECONFIG=/etc/rancher/k3s/k3s.yaml helm upgrade --install opamp-clients-1c-2g \
+     oci://ghcr.io/actions/actions-runner-controller-charts/gha-runner-scale-set \
+     --version 0.14.2 --namespace arc-runners \
+     --values infra/arc/values/opamp-clients-1c-2g.yaml --wait
+   ```
+
+   Install the two Docker-backed pools with the post-renderer:
 
    ```bash
    for tier in 2c-8g 4c-16g; do
@@ -212,8 +239,9 @@ One-time setup:
    `sudo k3s kubectl get autoscalingrunnersets -n arc-runners`.
    They should also appear under the repository's Settings → Actions → Runners.
 
-To update, bump the tag in both `values/opamp-clients-*.yaml` files and run
-`helm upgrade`, as with the others below.
+To update, bump the tag in all three `values/opamp-clients-*.yaml` files and
+run `helm upgrade`. The lightweight pool uses the native Helm command above;
+the two Docker-backed pools need the DinD post-renderer.
 
 ## Deploying an image update
 

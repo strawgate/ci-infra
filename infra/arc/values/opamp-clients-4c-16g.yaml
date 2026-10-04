@@ -28,3 +28,6 @@ template:
         image: ghcr.io/strawgate/ci-infra-opamp-clients-arc-runner:20260929-0f51823
         command: ["/home/runner/run.sh"]
         imagePullPolicy: IfNotPresent
+        env:
+          - name: PYTHON_CPU_COUNT
+            value: "4"
