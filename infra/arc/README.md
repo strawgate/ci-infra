@@ -338,7 +338,9 @@ curl -fsS http://192.168.122.1:5000/v2/
 ARC 0.14.2 injects the DinD sidecar after merging Helm values, so ordinary
 `template.spec` values cannot change its `dockerd` arguments. The pinned-chart
 post-renderer at `infra/arc/node/helm-plugins/arc-dind-mirror/render.sh` adds
-the mirror arguments and fails if the chart's expected sidecar changes. Install
+the mirror arguments, wraps the sidecar's start so Docker's containers stay
+inside the pod (see [DinD containment](#dind-containment)), and fails if the
+chart's expected sidecar changes. Install
 it in the ARC VM as `/usr/local/libexec/arc-dind-mirror-post-render`, mode 0755,
 and **include `--post-renderer` on every DinD Helm install/upgrade**. The VM
 uses Helm 3 (an executable path); Helm 4 validation uses the adjacent plugin
@@ -372,6 +374,43 @@ sudo systemctl start dockerhub-mirror-check.service
 If the cache grows despite expiry,
 investigate and arrange a quiet, registry-offline garbage collection pass;
 Distribution garbage collection is not safe against concurrent writes.
+
+### DinD containment
+
+containerd gives a privileged container the node's cgroup namespace, so the
+DinD sidecar sees the node's cgroup root. Left alone, `dockerd` puts every
+container it starts in the node's `/sys/fs/cgroup/docker/<id>`: outside the
+runner pod, with no CPU or memory limit, all 56 CPUs, and invisible to
+Kubernetes. Measured on 2026-10-04: that cgroup had used ~36 CPU-hours in 21
+hours, and held 81 leaked container cgroups. The image's own cgroup-v2 setup
+also runs against the node's root (it created `/sys/fs/cgroup/init` there).
+
+The post-renderer's wrapper, before the image's entrypoint:
+
+- reads the sidecar's cgroup and starts `dockerd --cgroup-parent=<pod>/dind`,
+  so containers are siblings of the pod's own containers, under the pod's
+  `cpu.max` and `memory.max`;
+- sets `<pod>/dind/memory.max` to the pod's limit less 2 GiB (or less a
+  quarter, for pods under 8 GiB). Without a limit of its own, a container that
+  fills the pod triggers a pod-wide OOM, and the kernel picks the runner
+  (kubelet gives a Burstable pod's processes `oom_score_adj` ~991, Docker its
+  containers 0, and `memory.oom.group` kills the whole runner container). With
+  it, only processes under `dind` are candidates;
+- sets `dockerd`'s `oom_score_adj` to -900, so a pod-wide OOM doesn't take the
+  daemon (and, by `memory.oom.group`, the whole sidecar).
+
+Tested in throwaway pods (2 CPU, 4 and 8 GiB): four busy-loop containers held
+to ~1.9 CPUs; a 6 GiB allocation killed only its container; the pod's cgroup
+tree is removed on delete even with a container running. Containers still
+see 56 CPUs in `nproc` and an unlimited `cpu.max` of their own (their cgroup
+namespace starts at the container), so jobs that size thread pools from the
+CPU count need it passed in (`GOMAXPROCS`, `PYTHON_CPU_COUNT`).
+
+To check a runner: `kubectl logs <pod> -c dind | grep arc-dind` prints the
+cgroup and limit; nothing new should appear under the node's
+`/sys/fs/cgroup/docker`; OOM kills show in `<pod cgroup>/dind/memory.events`.
+The gh-aw agent pool runs `dockerd` in its runner container and is not
+covered.
 
 ### Each update
 
