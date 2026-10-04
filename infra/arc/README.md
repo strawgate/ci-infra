@@ -13,8 +13,8 @@ to this repository.
 | `o11yfleet-4c-16g`      | 4 vCPU / 16 GiB |               6 | E2E, mutation, and deploy-gating work |
 
 The same node also runs two scale sets for **strawgate/opamp-clients**
-(`opamp-clients-2c-8g`, up to 6 runners, and `opamp-clients-4c-16g`, up to
-5). strawgate is a user account, and a user account's self-hosted runners
+(`opamp-clients-2c-8g`, up to 8 runners, and `opamp-clients-4c-16g`, up to
+7). strawgate is a user account, and a user account's self-hosted runners
 belong to one repository, so that repository needs scale sets of its own
 rather than sharing these. See [opamp-clients](#opamp-clients).
 
