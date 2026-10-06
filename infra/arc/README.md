@@ -14,8 +14,8 @@ to this repository.
 | `o11yfleet-4c-16g`      | 4 vCPU / 16 GiB |               6 | E2E, mutation, and deploy-gating work |
 
 The same node also runs three scale sets for **strawgate/opamp-clients**:
-`opamp-clients-1c-2g` (up to 2), `opamp-clients-2c-8g` (up to 8), and
-`opamp-clients-4c-16g` (up to 7). strawgate is a user account, and a user
+`opamp-clients-1c-2g` (up to 2), `opamp-clients-2c-8g` (up to 6), and
+`opamp-clients-4c-16g` (up to 5). strawgate is a user account, and a user
 account's self-hosted runners
 belong to one repository, so that repository needs scale sets of its own
 rather than sharing these. See [opamp-clients](#opamp-clients).
@@ -203,19 +203,25 @@ reports all 56 VM CPUs despite the runner's affinity. This also bounds older
 branches' proof scripts as new runner pods start. Python versions before
 3.13 need the affinity-aware worker count in the repository's scripts.
 
-Its jobs share the node with this fleet's. The 2-core cap is 8, and the 4-core
-cap is 7. The pod-level CPU and memory requests
-remain equal to their limits, so Kubernetes leaves excess runner pods Pending
-when the node is full. Watch o11yfleet queue time and node scheduling during
-overlapping runs. Past
-the caps, jobs remain queued at GitHub.
+Its jobs share the node with this fleet's. The 2-core cap is 6, and the 4-core
+cap is 5: at most 32 CPUs and 108 GiB of requests. The pod-level CPU and memory
+requests remain equal to their limits, so Kubernetes leaves excess runner pods
+Pending when the node is full. Past the caps, jobs remain queued at GitHub.
+
+The caps were 8 and 7 from 2026-10-04 to 2026-10-06. At those, opamp-clients
+at its maximum requested 44 CPUs and 148 GiB of the Kata worker's 54 CPUs and
+about 191 GiB allocatable, and o11yfleet's 4-core runner pods stayed Pending
+(`Insufficient memory`) for up to 98 minutes: its deploy gate and its E2E jobs
+did not start. At 6 and 5, o11yfleet keeps room for its six 4-core runners
+whatever opamp-clients is doing. Raise them only with the node's allocatable
+CPUs and memory, and every other set's cap, added up.
 
 As of 2026-10-04, `opamp-clients-4c-16g` is trialing **4 CPUs / 12 GiB**;
 the existing runner label is retained so workflows need no routing change.
 Both memory requests and limits are 12 GiB, preserving Guaranteed QoS and
-dedicated CPU placement. The seven-runner cap from main, image, and other pools
-are preserved. This saves 4 GiB of scheduling reservation per new runner (28 GiB
-at the cap); existing jobs retain their original resources until completion.
+dedicated CPU placement. The cap, image, and other pools are preserved. This
+saves 4 GiB of scheduling reservation per new runner (20 GiB at the cap of
+five); existing jobs retain their original resources until completion.
 Observed pod peaks included substantial file cache, so judge the trial by
 full-job completion, duration, and cgroup `memory.events`, not peak usage
 alone. Roll back both memory values to 16 GiB if jobs OOM or slow materially.
