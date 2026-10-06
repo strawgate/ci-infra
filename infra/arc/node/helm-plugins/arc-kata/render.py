@@ -26,7 +26,9 @@ for doc in docs:
     probe = dind.setdefault("startupProbe", {})
     probe["timeoutSeconds"] = max(10, probe.get("timeoutSeconds", 1))
     for argument in ["--registry-mirror=http://192.168.122.1:5000",
-                     "--insecure-registry=192.168.122.1:5000"]:
+                     "--insecure-registry=192.168.122.1:5000",
+                     "--mtu=1450",
+                     "--default-network-opt=bridge=com.docker.network.driver.mtu=1450"]:
         if argument not in dind["args"]:
             dind["args"].append(argument)
     # Use the exact image qualified in the staged pilot, not the moving dind tag.
