@@ -1,0 +1,48 @@
+# Kata 4.2.0. Install only on the bare-metal worker, never the existing ARC VM.
+deploymentMode: job
+k8sDistribution: k3s
+defaultShim:
+  amd64: clh-runtime-rs
+imagePullPolicy: IfNotPresent
+image:
+  reference: quay.io/kata-containers/kata-deploy
+  tag: "4.2.0@sha256:8878e275eeb611f5ed1613009db195f4034b25fea461aef61d407fead58872d3"
+kubectlImage:
+  reference: quay.io/kata-containers/kubectl
+  tag: "latest@sha256:a8ef6fce0a3defa603d89184a5806fcb4f1d8021312cbaa5ebc7584510bc95ee"
+nodeSelector:
+  ci-infra/kata-worker: "true"
+tolerations:
+  - key: ci-infra/kata-only
+    operator: Equal
+    value: "true"
+    effect: NoSchedule
+job:
+  dispatcherImage:
+    reference: ghcr.io/kata-containers/k8s-job-dispatcher
+    tag: "0.3.0@sha256:b2540bc9c85d52c4ad96b82d4b2579d2169069f2f77725df50e0278373c1927e"
+  parallelism: 1
+  activeDeadlineSeconds: 900
+  dispatcherNodeSelector:
+    kubernetes.io/hostname: o11yfleet-arc
+shims:
+  disableAll: true
+  clh-runtime-rs:
+    enabled: true
+    dropIn: |
+      [hypervisor.clh]
+      # Share the four guest CPUs with the guest OS, like a normal four-vCPU VM.
+      overhead_vcpus = 0.0
+      overhead_memory = 512
+      [runtime]
+      sandbox_cgroup_only = true
+      static_sandbox_resource_mgmt = true
+      emptydir_mode = "block-plain"
+    runtimeClass:
+      nodeSelector:
+        ci-infra/kata-worker: "true"
+      overhead:
+        # Keep an integer pod CPU budget for static CPU-manager placement.
+        # Guest/runtime CPU overhead shares the requested vCPUs.
+        cpu: "0"
+        memory: 768Mi

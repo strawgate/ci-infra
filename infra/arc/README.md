@@ -1,5 +1,10 @@
 # ARC runner scale sets
 
+The live fleet now runs on the bare-metal Kata worker. Use
+[Kata deployment and rollback](kata/README.md) and `just deploy-runners`
+for all scale-set upgrades. The non-Kata deployment commands below describe
+the previous VM topology and must not be used for the active fleet.
+
 This directory is the source for the non-secret runner images and Helm values
 of the self-hosted GitHub Actions fleet. The GitHub App private key is
 only stored in the `arc-github-app` Kubernetes secret and must never be added
