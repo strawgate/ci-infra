@@ -32,6 +32,21 @@ const docker = JSON.parse(run('docker', ['info', '--format', '{{json .}}']));
 assert.equal(docker.NCPU, expectedCpus);
 assert(docker.MemTotal < 9 * 1024 ** 3);
 assert(docker.RegistryConfig.Mirrors.includes('http://192.168.122.1:5000/'));
+assert.equal(run('cat', ['/sys/class/net/eth0/mtu']), '1450');
+const mtuOption = '{{index .Options "com.docker.network.driver.mtu"}}';
+assert.equal(run('docker', ['network', 'inspect', 'bridge', '--format', mtuOption]), '1450');
+const network = `kata-smoke-network-${process.pid}`;
+const download = 'https://api.nuget.org/v3-flatcontainer/newtonsoft.json/13.0.3/newtonsoft.json.13.0.3.nupkg';
+const networkCheck = `test "$(cat /sys/class/net/eth0/mtu)" = 1450; wget -T 30 -qO /tmp/package "${download}"; test "$(wc -c </tmp/package)" -gt 2000000`;
+// Exercise actual HTTPS payload transfer without host networking or MTU overrides.
+run('docker', ['run', '--rm', 'alpine:3.22', 'sh', '-ec', networkCheck]);
+try {
+  run('docker', ['network', 'create', network]);
+  assert.equal(run('docker', ['network', 'inspect', network, '--format', mtuOption]), '1450');
+  run('docker', ['run', '--rm', '--network', network, 'alpine:3.22', 'sh', '-ec', networkCheck]);
+} finally {
+  try { run('docker', ['network', 'rm', network]); } catch {}
+}
 // Pull, networking, service startup, and a filesystem write in a nested container.
 assert.equal(run('docker', ['run', '--rm', 'alpine:3.22', 'sh', '-ec',
   'echo test >/tmp/test; test "$(cat /tmp/test)" = test; wget -qO /dev/null https://github.com']), '');
@@ -39,7 +54,7 @@ const tag = `kata-smoke-${process.pid}:test`;
 const service = `kata-smoke-${process.pid}`;
 try {
   execFileSync('docker', ['build', '--tag', tag, '-'], {
-    input: 'FROM alpine:3.22\nRUN echo built > /build-check\n',
+    input: `FROM alpine:3.22\nRUN ${networkCheck} && echo built > /build-check\n`,
     encoding: 'utf8', timeout: 120_000, stdio: ['pipe', 'pipe', 'pipe'],
   });
   assert.equal(run('docker', ['run', '--rm', tag, 'cat', '/build-check']), 'built');
@@ -56,4 +71,4 @@ try {
   try { run('docker', ['rm', '--force', service]); } catch {}
   try { run('docker', ['image', 'rm', tag]); } catch {}
 }
-console.log('Kata resource visibility, shared storage, and nested Docker smoke passed');
+console.log('Kata resource visibility, storage, MTU, HTTPS downloads and nested Docker smoke passed');

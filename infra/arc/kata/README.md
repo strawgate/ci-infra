@@ -38,6 +38,9 @@ emptyDir roots for UID 1001, never the shared host cache.
 DinD uses its normal Unix socket, a 32 GiB Docker-store ceiling and the
 existing mirror at `http://192.168.122.1:5000`. The agent lane retains its
 same-container Docker/vfs topology. Startup probes allow VM exec latency.
+Both Docker's default bridge and newly created bridges use MTU 1450,
+matching the pod's VXLAN interface. The Kata renderer sets both daemon
+flags; the agent reads equivalent settings from its ConfigMap.
 
 ## Validate and upgrade
 
@@ -58,6 +61,10 @@ just deploy-runners
 ```
 
 This supports Helm 3's executable renderer and Helm 4's plugin renderer.
+It applies the agent daemon ConfigMap before upgrading the scale sets.
+Running jobs are not restarted: their existing networks retain the old MTU
+until those runners finish. Verify the default bridge, a newly created
+bridge, and a Docker build on fresh standard and agent smoke pods.
 The old `arc-dind-mirror` renderer is only for rollback, not active Kata pools.
 Publishing an image alone does not update the fleet. Qualify real GitHub jobs
 for each workload topology; an idle runner is not full CI qualification.

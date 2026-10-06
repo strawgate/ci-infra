@@ -1,5 +1,6 @@
 """Validate the rendered, pinned charts, not just the input values."""
 import pathlib
+import json
 import subprocess
 import sys
 
@@ -18,6 +19,10 @@ def render(chart, version, values, *args):
 
 def main():
     settings = yaml.safe_load((ROOT / "kata-values.yaml").read_text())
+    configmap = yaml.safe_load((ROOT / "../node/docker-daemon-configmap.yaml").read_text())
+    daemon = json.loads(configmap["data"]["daemon.json"])
+    assert daemon["mtu"] == 1450
+    assert daemon["default-network-opts"]["bridge"]["com.docker.network.driver.mtu"] == "1450"
     assert settings["defaultShim"]["amd64"] == "clh-runtime-rs"
     assert 'emptydir_mode = "block-plain"' in settings["shims"]["clh-runtime-rs"]["dropIn"]
     assert 'sandbox_cgroup_only = true' in settings["shims"]["clh-runtime-rs"]["dropIn"]
@@ -52,6 +57,8 @@ def main():
     dind = next(c for c in pod["initContainers"] if c["name"] == "dind")
     assert dind["restartPolicy"] == "Always"
     assert "--registry-mirror=http://192.168.122.1:5000" in dind["args"]
+    assert "--mtu=1450" in dind["args"]
+    assert "--default-network-opt=bridge=com.docker.network.driver.mtu=1450" in dind["args"]
     assert dind["securityContext"]["privileged"]
     assert pod["securityContext"]["fsGroup"] == 1001
     runner = next(c for c in pod["containers"] if c["name"] == "runner")

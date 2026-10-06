@@ -26,6 +26,8 @@ if dind:
     assert dind["startupProbe"]["timeoutSeconds"] >= 10
     assert "@sha256:" in dind["image"]
     assert "--registry-mirror=http://192.168.122.1:5000" in dind["args"]
+    assert "--mtu=1450" in dind["args"]
+    assert "--default-network-opt=bridge=com.docker.network.driver.mtu=1450" in dind["args"]
     assert next(e for e in runner["env"] if e["name"] == "DOCKER_HOST")["value"] == "unix:///var/run/docker.sock"
     assert next(v for v in pod["volumes"] if v["name"] == "docker-store")["emptyDir"]["sizeLimit"] == "32Gi"
     ownership = pod["initContainers"][0]

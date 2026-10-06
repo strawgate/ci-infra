@@ -42,6 +42,9 @@ class RendererTests(unittest.TestCase):
         self.assertEqual(dind["startupProbe"]["timeoutSeconds"], 10)
         self.assertIn("@sha256:", dind["image"])
         self.assertIn("--registry-mirror=http://192.168.122.1:5000", dind["args"])
+        self.assertEqual(dind["args"].count("--mtu=1450"), 1)
+        self.assertEqual(dind["args"].count(
+            "--default-network-opt=bridge=com.docker.network.driver.mtu=1450"), 1)
         self.assertEqual(pod["resources"]["limits"]["cpu"], "4")
 
     def test_non_dind_runner_stays_non_dind(self):
