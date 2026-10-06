@@ -1,9 +1,9 @@
-# Smaller-memory trial for UI and collector E2E suites; SDK E2E stays on 4c-16g.
+# New opt-in label. Never change existing workflow routing during qualification.
 githubConfigUrl: https://github.com/strawgate/o11yfleet
 githubConfigSecret: arc-github-app
-runnerScaleSetName: o11yfleet-4c-8g
+runnerScaleSetName: o11yfleet-kata-4c-8g
 minRunners: 0
-maxRunners: 2
+maxRunners: 1
 containerMode:
   type: dind
 controllerServiceAccount:
@@ -19,6 +19,7 @@ template:
         operator: Equal
         value: "true"
         effect: NoSchedule
+    # Pod-level limits bound the runner and all nested Docker containers together.
     resources:
       requests:
         cpu: "4"
@@ -34,13 +35,13 @@ template:
         image: ghcr.io/strawgate/ci-infra-o11yfleet-arc-runner:20260929-0f51823
         command: ["/home/runner/run.sh"]
         imagePullPolicy: IfNotPresent
-        env:
-          # The pod's CPU count for what doesn't read the cgroup quota: os.cpu_count
-          # and Go before 1.25 (infra/arc/README.md, "DinD containment").
-          - name: PYTHON_CPU_COUNT
-            value: "4"
-          - name: GOMAXPROCS
-            value: "4"
+        resources:
+          requests:
+            cpu: "4"
+            memory: 8Gi
+          limits:
+            cpu: "4"
+            memory: 8Gi
         volumeMounts:
           - name: pnpm-store
             mountPath: /home/runner/.pnpm-store-shared

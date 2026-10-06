@@ -1,0 +1,11 @@
+[Unit]
+Description=Restrict the bare-metal CI worker to its private bridge
+Before=k3s-agent.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/libexec/arc-kata-firewall
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target
