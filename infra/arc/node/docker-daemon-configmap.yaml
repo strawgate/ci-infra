@@ -7,5 +7,7 @@ data:
   daemon.json: |
     {
       "registry-mirrors": ["http://192.168.122.1:5000"],
-      "insecure-registries": ["192.168.122.1:5000"]
+      "insecure-registries": ["192.168.122.1:5000"],
+      "mtu": 1450,
+      "default-network-opts": { "bridge": { "com.docker.network.driver.mtu": "1450" } }
     }

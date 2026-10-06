@@ -3,8 +3,12 @@
 # image and dockerd arguments cannot be changed through template.spec in
 # values.yaml.
 #
-# Two changes to the sidecar:
+# Three changes to the sidecar:
 # - dockerd pulls through the Docker Hub mirror.
+# - Its bridges take the pod network's MTU (flannel's VXLAN: 1450), not
+#   Docker's default 1500. A container on a 1500 bridge asks servers for
+#   packets the pod's network can't carry; where the "too big" reply doesn't
+#   come back, the download stalls for ever (infra/arc/README.md, "DinD MTU").
 # - It runs our image (infra/arc/dind) through `arc-dind-start`, which keeps
 #   Docker's containers inside the runner pod's limits and gives each the pod's
 #   CPU count (infra/arc/README.md, "DinD containment").
@@ -38,6 +42,8 @@ DIND_IMAGE=$DIND_IMAGE awk '
     sub(/[^[:space:]].*$/, "", indent)
     print indent "- --registry-mirror=http://192.168.122.1:5000"
     print indent "- --insecure-registry=192.168.122.1:5000"
+    print indent "- --mtu=1450"
+    print indent "- --default-network-opt=bridge=com.docker.network.driver.mtu=1450"
     # At the indent of the sidecar args key (Helm 3 indents list items
     # under their key, Helm 4 does not).
     print key "command:"

@@ -443,6 +443,35 @@ cgroup and limits; nothing new should appear under the node's
 The gh-aw agent pool runs `dockerd` in its runner container and is not
 covered.
 
+### DinD MTU
+
+A runner pod's network (flannel's VXLAN) carries 1450-byte packets: `eth0` in
+the pod says so. Docker's bridges default to 1500, so a container on one asks
+a server for 1460-byte segments, and the server's full packets do not fit the
+last hop. Where the "fragmentation needed" reply reaches the server, it sends
+smaller ones; where it does not, the connection stalls for ever with no error.
+
+Seen on 2026-10-06 in an `o11yfleet-4c-16g` pod: `dotnet publish` inside a
+`docker build` sat for 46 minutes at no CPU with its connections to NuGet's
+CDN (150.171.110.210:443) retransmitting, which is what timed out o11yfleet's
+SDK E2E image builds. From that pod, a 2.4 MB NuGet package:
+
+| From                                | Result                |
+| ----------------------------------- | --------------------- |
+| a container on the default bridge   | timed out, 3 times of 3 |
+| a container with `--network host`   | 0.2 s, 3 times of 3   |
+| a bridge created with MTU 1450      | 0.2 s, 3 times of 3   |
+
+So `dockerd` is started with `--mtu=1450` (the default bridge, which builds
+use) and `--default-network-opt=bridge=com.docker.network.driver.mtu=1450`
+(networks made later, such as Compose's): the post-renderer adds both to the
+sidecar, and the agent pool's `daemon.json` carries the same. If the cluster's
+pod MTU changes, change these with it.
+
+To check a runner: `docker network inspect bridge -f '{{index .Options
+"com.docker.network.driver.mtu"}}'` in the pod prints 1450, and
+`cat /sys/class/net/eth0/mtu` in a container matches the pod's.
+
 ### Each update
 
 Bump the tag in all four o11yfleet values files and apply (for the
